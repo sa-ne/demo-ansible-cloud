@@ -1,0 +1,28 @@
+---
+- name: Delete Application Resource Group
+  hosts: localhost
+  tasks:
+    - name: Delete DNS Entries for VMs
+      azure_rm_dnsrecordset:
+        resource_group: "{{ azure_infra_resource_group }}"
+        relative_name: "{{ item }}"
+        zone_name: "{{ azure_infra_zone }}"
+        record_type: A
+        state: absent
+      with_items:
+        - "{{ groups['web'] }}"
+
+    - name: Delete DNS Entry for Load Balancer
+      azure_rm_dnsrecordset:
+        resource_group: "{{ azure_infra_resource_group }}"
+        relative_name: "{{ app_prefix }}"
+        zone_name: "{{ azure_infra_zone }}"
+        record_type: A
+        state: absent
+
+    - name: Delete Application Resource Group
+      azure_rm_resourcegroup:
+        location: "{{ azure_location }}"
+        name: "{{ app_prefix }}-resource-group"
+        force: yes
+        state: absent

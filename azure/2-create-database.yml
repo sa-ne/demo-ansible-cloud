@@ -1,0 +1,58 @@
+---
+- name: Create Application MySQL Database
+  hosts: localhost
+  tasks:
+    - name: Create MySQL Server in Azure Database for MySQL Service
+      azure_rm_mysqlserver:
+        name: "{{ app_prefix }}-mysql-server"
+        resource_group: "{{ app_prefix }}-resource-group"
+        location: "{{ azure_location }}"
+        sku:
+          name: B_Gen5_1
+        storage_mb: 5192
+        enforce_ssl: True
+        state: present
+        admin_username: "{{ app_database_username }}"
+        admin_password: "{{ app_database_password }}"
+
+    - name: Create MySQL Database
+      azure_rm_mysqldatabase:
+        resource_group: "{{ app_prefix }}-resource-group"
+        server_name: "{{ app_prefix }}-mysql-server"
+        name: "{{ app_prefix }}"
+        state: present
+
+#    Reconstructed from: /subscriptions/.../resourceGroups/.../providers/Microsoft.DBforMySQL/servers/.../firewallRules
+#    Enable this if you want remote access to MySQL database. Replace 1.2.3.4 with your IP.
+#
+#    - name: Update Firewall Rules for MySQL Database
+#      azure_rm_resource:
+#        api_version: "2017-12-01-preview"
+#        resource_group: "{{ app_prefix }}-resource-group"
+#        provider: "DBforMySQL"
+#        resource_name: "{{ app_prefix }}-mysql-server"
+#        resource_type: servers
+#        subresource:
+#          - type: firewallRules
+#            name: remote_access
+#        body:
+#          location: eastus
+#          properties:
+#              startIpAddress: "1.2.3.4"
+#              endIpAddress: "1.2.3.4"
+
+    - name: Allow All Azure Resources Access to MySQL Database
+      azure_rm_resource:
+        api_version: "2017-12-01-preview"
+        resource_group: "{{ app_prefix }}-resource-group"
+        provider: "DBforMySQL"
+        resource_name: "{{ app_prefix }}-mysql-server"
+        resource_type: servers
+        subresource:
+          - type: firewallRules
+            name: AllowAllWindowsAzureIps
+        body:
+          location: "{{ azure_location }}"
+          properties:
+            startIpAddress: 0.0.0.0
+            endIpAddress: 0.0.0.0

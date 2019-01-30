@@ -1,0 +1,16 @@
+---
+all:
+  vars:
+    app_prefix: "wallapp"
+    app_source: "https://github.com/sa-ne/simple-lamp-application.git"
+    azure_location: eastus
+    azure_cidr_network: 10.254.252.0/22
+    azure_app_subnet: 10.254.252.0/24
+    azure_infra_resource_group: "umbrella-eastus"
+    azure_infra_zone: "azure.redhat-demo.com"
+  children:
+    web:
+      hosts:
+        app-vm1:
+        app-vm2:
+        app-vm3:

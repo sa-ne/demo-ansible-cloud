@@ -1,0 +1,225 @@
+---
+- name: Deploy Application VMs on Azure
+  hosts: localhost
+  tasks:
+    - name: Create Load Balancer Public IP
+      azure_rm_publicipaddress:
+        resource_group: "{{ app_prefix }}-resource-group"
+        allocation_method: Static
+        name: "{{ app_prefix }}-load-balancer"
+      register: load_balancer_ip
+
+    - name: Create DNS Entry for Load Balancer
+      azure_rm_dnsrecordset:
+        resource_group: "{{ azure_infra_resource_group }}"
+        relative_name: "{{ app_prefix }}"
+        zone_name: "{{ azure_infra_zone }}"
+        record_type: A
+        state: present
+        records:
+          - entry: "{{ load_balancer_ip.state.ip_address }}"
+
+    - name: Create Load Balancer
+      azure_rm_loadbalancer:
+        name: "{{ app_prefix }}-load-balancer"
+        location: "{{ azure_location }}"
+        resource_group: "{{ app_prefix }}-resource-group"
+        frontend_ip_configurations:
+          - name: "frontend-config"
+            public_ip_address: "{{ app_prefix }}-load-balancer"
+        backend_address_pools:
+          - name: "backend-pool"
+        probes:
+          - name: "probe"
+            port: 80
+            protocol: Http
+            request_path: /monitor.html
+            fail_count: 3
+            interval: 5
+        inbound_nat_pools:
+          - name: "inbound-nat-pool"
+            frontend_ip_configuration_name: "frontend-config"
+            protocol: Tcp
+            frontend_port_range_start: 443
+            frontend_port_range_end: 444
+            backend_port: 443
+        load_balancing_rules:
+          - name: "load-balancing-rule"
+            frontend_ip_configuration: "frontend-config"
+            backend_address_pool: "backend-pool"
+            frontend_port: 443
+            backend_port: 443
+            probe: "probe"
+
+    - name: Create Public IPs
+      azure_rm_publicipaddress:
+        resource_group: "{{ app_prefix }}-resource-group"
+        allocation_method: Static
+        name: "{{ item }}"
+      with_items:
+        - "{{ groups['web'] }}"
+      register: app_vm_ips
+
+    - name: Create VM NICs
+      azure_rm_networkinterface:
+        resource_group: "{{ app_prefix }}-resource-group"
+        name: "{{ item }}"
+        virtual_network: "{{ app_prefix }}-virtual-network"
+        subnet: "Default"
+        security_group: "{{ app_prefix }}-security-group"
+        ip_configurations:
+          - name: "{{ item }}-ip-config"
+            public_ip_address_name: "{{ item }}"
+            primary: yes
+            load_balancer_backend_address_pools:
+              - name: "backend-pool"
+                load_balancer: "{{ app_prefix }}-load-balancer"
+      with_items:
+        - "{{ groups['web'] }}"
+      register: app_vm_nics
+
+    - name: Create DNS Entries for VMs
+      azure_rm_dnsrecordset:
+        resource_group: "{{ azure_infra_resource_group }}"
+        relative_name: "{{ item.0 }}"
+        zone_name: "{{ azure_infra_zone }}"
+        record_type: A
+        state: present
+        records:
+          - entry: "{{ item.1.state.ip_address }}"
+      with_together:
+        - "{{ groups['web'] }}"
+        - "{{ app_vm_ips.results }}"
+
+    - name: Create VM Availability Set
+      azure_rm_availabilityset:
+        name: "{{ app_prefix }}-availability-set"
+        location: "{{ azure_location }}"
+        resource_group: "{{ app_prefix }}-resource-group"
+        platform_fault_domain_count: 2
+        platform_update_domain_count: 2
+        sku: Aligned
+        state: present
+
+    - name: Create VMs
+      azure_rm_virtualmachine:
+        admin_username: "{{ app_server_username }}"
+        network_interfaces: "{{ item }}"
+        image:
+          publisher: RedHat
+          offer: RHEL
+          sku: 7-LVM
+          version: latest
+        managed_disk_type: Standard_LRS
+        name: "{{ item }}"
+        resource_group: "{{ app_prefix }}-resource-group"
+        ssh_password_enabled: False
+        ssh_public_keys:
+          - path: "/home/{{ app_server_username }}/.ssh/authorized_keys"
+            key_data: "{{ app_server_public_key }}"
+        started: yes
+        state: present
+        vm_size: Standard_B1s
+        availability_set: "{{ app_prefix }}-availability-set"
+      with_items:
+        - "{{ groups['web'] }}"
+
+    - name: Populate In-Memory Inventory
+      add_host:
+        hostname: "{{ item.0 }}"
+        ansible_ssh_host: "{{ item.1.state.ip_address }}"
+        groups: dynamic_inventory
+      with_together:
+        - "{{ groups['web'] }}"
+        - "{{ app_vm_ips.results }}"
+
+- name: Configure VMs & Deploy Application
+  hosts: dynamic_inventory
+  become: yes
+  tasks:
+    - name: Install Packages
+      yum:
+        name:
+          - "vim-enhanced"
+          - "httpd24"
+          - "httpd24-mod_ssl"
+          - "rh-php71"
+          - "rh-php71-php"
+          - "rh-php71-php-mysqlnd"
+          - "git"
+          - "MySQL-python"
+          - "mariadb"
+        state: latest
+
+    - name: Copy Client Configuration to First Host Only
+      copy:
+        src: "files/{{ item }}"
+        dest: "/tmp/{{ item }}"
+        mode: 0400
+      with_items:
+        - "my.cnf"
+      when: inventory_hostname == groups['web'][0]
+
+    - name: Copy Database Script to First Host Only
+      template:
+        src: templates/database.sql.j2
+        dest: /tmp/database.sql
+        mode: 0400
+      when: inventory_hostname == groups['web'][0]
+
+    - name: Configure Database on First Host Only
+      mysql_db:
+        login_host: "{{ app_prefix }}-mysql-server.mysql.database.azure.com"
+        login_user: "{{ app_database_username }}@{{ app_prefix }}-mysql-server"
+        login_password: "{{ app_database_password }}"
+        name: "{{ app_prefix }}"
+        state: import
+        target: /tmp/database.sql
+        ssl_ca: /etc/pki/tls/certs/ca-bundle.crt
+        config_file: /tmp/my.cnf
+      when: inventory_hostname == groups['web'][0]
+
+    - name: Allow httpd Service to Connect to Databases
+      seboolean:
+        name: httpd_can_network_connect_db
+        state: yes
+        persistent: yes
+
+    - name: Deploy Application Configuration
+      template:
+        src: templates/credentials.php.j2
+        dest: /opt/rh/httpd24/root/var/www/credentials.php
+        owner: apache
+        group: root
+        mode: 0460
+
+    - name: Deploy Application Source
+      git:
+        repo: "{{ app_source }}"
+        dest: "/opt/rh/httpd24/root/var/www/html"
+        force: yes
+
+    - name: Create Monitor
+      copy:
+        remote_src: yes
+        src: /dev/null
+        dest: /opt/rh/httpd24/root/var/www/html/monitor.html
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Start Apache Service
+      systemd:
+        name: httpd24-httpd
+        state: started
+        enabled: yes
+
+    - name: Enable http{,s} via firewalld
+      firewalld:
+        immediate: yes
+        permanent: yes
+        service: "{{ item }}"
+        state: enabled
+      with_items:
+        - "http"
+        - "https"

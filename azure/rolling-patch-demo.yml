@@ -1,0 +1,74 @@
+---
+- name: Build Inventory
+  hosts: localhost
+  tasks:
+    - name: Get VM Public IPs
+      azure_rm_publicipaddress_facts:
+        name: "{{ item }}"
+        resource_group: "{{ app_prefix }}-resource-group"
+      register: app_vm_ips
+      with_items:
+        - "{{ groups['web'] }}"
+
+    - debug:
+        msg: "{{ item.ansible_facts.azure_publicipaddresses[0].properties.ipAddress }}"
+        verbosity: 2
+      with_items:
+        - "{{ app_vm_ips.results }}"
+
+    - name: Populate In-Memory Inventory
+      add_host:
+        hostname: "{{ item.0 }}"
+        ansible_ssh_host: "{{ item.1.ansible_facts.azure_publicipaddresses[0].properties.ipAddress }}"
+        groups: dynamic_inventory
+      with_together:
+        - "{{ groups['web'] }}"
+        - "{{ app_vm_ips.results }}"
+
+- name: Perform Rolling Update in Serial
+  hosts: dynamic_inventory
+  serial: 1
+  become: yes
+  tasks:
+    - name: Remove Monitor
+      file:
+        path: /opt/rh/httpd24/root/var/www/html/monitor.html
+        state: absent
+ 
+    - name: Wait for Probe to Update
+      pause:
+        seconds: 20
+
+    - name: Stop httpd
+      systemd:
+        service: httpd24-httpd
+        state: stopped
+
+    - name: Apply VM Patches
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Reboot VM
+      shell: "sleep 5 && reboot"
+      async: 1
+      poll: 0
+
+    - name: Wait for VM to Recover
+      wait_for:
+        host: "{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}"
+        port: 443
+      connection: local 
+
+    - name: Create Monitor
+      copy:
+        remote_src: yes
+        src: /dev/null
+        dest: /opt/rh/httpd24/root/var/www/html/monitor.html
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Wait for Probe to Update
+      pause:
+        seconds: 20
