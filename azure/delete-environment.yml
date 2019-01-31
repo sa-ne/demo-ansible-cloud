@@ -11,6 +11,8 @@
         state: absent
       with_items:
         - "{{ groups['web'] }}"
+      tags:
+        - dns
 
     - name: Delete DNS Entry for Load Balancer
       azure_rm_dnsrecordset:
@@ -19,6 +21,8 @@
         zone_name: "{{ azure_infra_zone }}"
         record_type: A
         state: absent
+      tags:
+        - dns
 
     - name: Delete Application Resource Group
       azure_rm_resourcegroup:

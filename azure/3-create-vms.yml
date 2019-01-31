@@ -18,6 +18,8 @@
         state: present
         records:
           - entry: "{{ load_balancer_ip.state.ip_address }}"
+      tags:
+        - dns
 
     - name: Create Load Balancer
       azure_rm_loadbalancer:
@@ -90,6 +92,8 @@
       with_together:
         - "{{ groups['web'] }}"
         - "{{ app_vm_ips.results }}"
+      tags:
+        - dns
 
     - name: Create VM Availability Set
       azure_rm_availabilityset:
