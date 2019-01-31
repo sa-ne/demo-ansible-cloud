@@ -1,10 +1,10 @@
 # Configure Ansible to Work with Azure
 
-Before we start working with the Anisble Azure modules we need two do two things. First, the Ansible Azure modules depend on some Python packages (like the Azure SDK) so we will need to install them. Second, we need to configure credentials so the Ansible modules can access resources in Azure. 
+Before we start working with the Anisble Azure modules we need to do two things. First, the Ansible Azure modules depend on some Python packages (like the Azure SDK) so we will need to install them. Second, we need to configure credentials so the Ansible modules can access resources in Azure.
 
 ## Installing Python Packages
 
-First let's source our Python virtual environment (see `../README.md` for more information). Ansible includes a suite of 
+First let's source our Python virtual environment (see `../README.md` for more information).
 
 ```bash
 source ~/python/demo-27/bin/activate
@@ -37,8 +37,6 @@ tenant=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 More information on configuring Ansible to work w/ Azure can be found on the Ansible website [2].
 
 # Ansible Azure Demos
-
-# Demos
 
 The following demos are available:
 
