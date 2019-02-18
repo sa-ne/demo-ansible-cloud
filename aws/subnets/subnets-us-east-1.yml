@@ -4,23 +4,39 @@ subnets:
     az: us-east-1a
     cidr: 10.250.0.0/24
     region: us-east-1
+    type: instance
   - name: "{{ app_prefix }}-us-east-1b"
     az: us-east-1b
     cidr: 10.250.1.0/24
     region: us-east-1
+    type: instance
   - name: "{{ app_prefix }}-us-east-1c"
     az: us-east-1c
     cidr: 10.250.2.0/24
     region: us-east-1
+    type: instance
   - name: "{{ app_prefix }}-us-east-1d"
     az: us-east-1d
     cidr: 10.250.3.0/24
     region: us-east-1
+    type: instance
   - name: "{{ app_prefix }}-us-east-1e"
     az: us-east-1e
     cidr: 10.250.4.0/24
     region: us-east-1
+    type: instance
   - name: "{{ app_prefix }}-us-east-1f"
     az: us-east-1f
     cidr: 10.250.5.0/24
     region: us-east-1
+    type: instance
+  - name: "{{ app_prefix }}-database-us-east-1a"
+    az: us-east-1a
+    cidr: 10.250.6.0/24
+    region: us-east-1
+    type: database
+  - name: "{{ app_prefix }}-database-us-east-1b"
+    az: us-east-1b
+    cidr: 10.250.7.0/24
+    region: us-east-1
+    type: database

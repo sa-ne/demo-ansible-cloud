@@ -1,0 +1,101 @@
+---
+- name: Create Application Database in RDS
+  hosts: localhost
+  tasks:
+    - name: Get VPC Facts
+      ec2_vpc_net_facts:
+        filters:
+          "tag:Name": "{{ app_prefix }}-vpc"
+        region: "{{ aws_region }}"
+      register: ec2_vpc_net_facts_results
+
+    - name: Debug ec2_vpc_net_facts_results
+      debug:
+        var: ec2_vpc_net_facts_results
+        verbosity: 2
+
+    - name: Get VPC Security Group Facts
+      ec2_group_facts:
+        filters:
+          vpc-id: "{{ ec2_vpc_net_facts_results.vpcs[0].id }}"
+          group-name: "{{ app_prefix }}-database-security-group"
+        region: "{{ aws_region }}"
+      register: ec2_group_facts_results
+
+    - name: Debug ec2_group_facts_results
+      debug:
+        var: ec2_group_facts_results
+        verbosity: 2
+
+    - name: Get Database Subnet Facts
+      ec2_vpc_subnet_facts:
+        region: "{{ aws_region }}"
+        filters:
+          tag:Name: "{{ app_prefix }}-database*" 
+          vpc-id: "{{ ec2_vpc_net_facts_results.vpcs[0].id }}"
+      register: ec2_vpc_subnet_facts_results
+
+    - name: Debug ec2_vpc_subnet_facts_results
+      debug:
+        var: ec2_vpc_subnet_facts_results
+        verbosity: 2
+
+    - name: Create db_subnets
+      set_fact:
+        db_subnets: "{{ db_subnets | default([]) }} + ['{{ item.subnet_id }}']"
+      with_items:
+        - "{{ ec2_vpc_subnet_facts_results.subnets }}"
+
+    - name: Debug db_subnets
+      debug:
+        var: db_subnets
+        verbosity: 2
+
+    - name: Create RDS Subnet Groups
+      rds_subnet_group:
+        description: "{{ app_prefix }}-database-{{ aws_region }}"
+        name: "{{ app_prefix }}-database-{{ aws_region }}"
+        region: "{{ aws_region }}"
+        state: present
+        subnets: "{{ db_subnets }}"
+      register: rds_subnet_group_results
+
+    - name: Debug rds_subnet_group_results
+      debug:
+        var: rds_subnet_group_results
+        verbosity: 2
+
+    - name: Create MariaDB Database in RDS
+      rds:
+        region: "{{ aws_region }}"
+        command: create
+        db_engine: "{{ aws_database_engine}}"
+        instance_name: "{{ app_prefix }}-database"
+        instance_type: "{{ aws_database_instance_type }}"
+        vpc_security_groups: "{{ ec2_group_facts_results.security_groups[0].group_id }}"
+        multi_zone: "{{ aws_database_multi_zone }}"
+        username: "{{ app_database_username }}"
+        password: "{{ app_database_password }}"
+        size: "{{ aws_database_size }}"
+        subnet: "{{ app_prefix }}-database-{{ aws_region }}"
+        wait: no
+      register: rds_results
+    
+    - name: Debug rds_results
+      debug:
+        var: rds_results
+        verbosity: 2
+    
+    - name: Get MariaDB Database Facts (Wait for Endpoint)
+      rds:
+        region: "{{ aws_region }}"
+        command: facts
+        instance_name: "{{ app_prefix }}-database"
+      register: rds_facts
+      retries: 100
+      until: rds_facts.instance.endpoint is not none
+    
+    - name: Debug rds_facts
+      debug:
+        var: rds_facts
+        verbosity: 2
