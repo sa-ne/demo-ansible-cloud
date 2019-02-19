@@ -70,6 +70,7 @@
         region: "{{ aws_region }}"
         command: create
         db_engine: "{{ aws_database_engine}}"
+        db_name: "{{ app_database_name }}"
         instance_name: "{{ app_prefix }}-database"
         instance_type: "{{ aws_database_instance_type }}"
         vpc_security_groups: "{{ ec2_group_facts_results.security_groups[0].group_id }}"

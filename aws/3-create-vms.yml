@@ -1,0 +1,301 @@
+---
+- name: Create Application VMs on AWS
+  hosts: localhost
+  tasks:
+    # An attempt to search for the latest Red Hat AMIs (must be part of Cloud Access)
+    - name: Get AMI Facts
+      ec2_ami_facts:
+        region: "{{ aws_region }}"
+        filters:
+          architecture: x86_64
+          virtualization-type: hvm
+          name: "RHEL-{{ aws_ami_rhel_version }}_HVM_GA-????????-x86_64-?-Access2-GP2"
+        owners: "{{ aws_redhat_owner_id }}"
+      register: ec2_ami_facts_results
+
+    - name: Debug ec2_ami_facts_results
+      debug:
+        var: ec2_ami_facts_results
+        verbosity: 2
+
+    - name: Fail if AMI Count < 1
+      fail:
+        msg: "ec2_ami_facts_results.image < 1: No AMIs Found!"
+      when: ec2_ami_facts_results.images | count < 1
+
+    - name: Debug AMI Name
+      debug:
+        msg: "AMI Name: {{ ec2_ami_facts_results.images[(((ec2_ami_facts_results.images | length) - 1) | int)].name }}"
+        verbosity: 2
+        
+    - name: Get VPC Facts
+      ec2_vpc_net_facts:
+        filters:
+          "tag:Name": "{{ app_prefix }}-vpc"
+        region: "{{ aws_region }}"
+      register: ec2_vpc_net_facts_results
+
+    - name: Debug ec2_vpc_net_facts_results
+      debug:
+        var: ec2_vpc_net_facts_results
+        verbosity: 2
+
+    - name: Get VPC Subnet Facts
+      ec2_vpc_subnet_facts:
+        filters:
+          vpc-id: "{{ ec2_vpc_net_facts_results.vpcs[0].id }}"
+        region: "{{ aws_region }}"
+      register: ec2_vpc_subnet_facts_results
+
+    - name: Debug ec2_vpc_subnet_facts_results
+      debug:
+        var: ec2_vpc_subnet_facts_results
+        verbosity: 2
+
+    - name: Combine Subnet Names & IDs Into Dictionary For Easy Lookup
+      set_fact:
+        subnet_name_id_dict: "{{ subnet_name_id_dict | default({}) | combine( { item.tags.Name: item.subnet_id } ) }}"
+      with_items:
+        - "{{ ec2_vpc_subnet_facts_results.subnets }}"
+
+    - name: Debug subnet_name_id_dict
+      debug:
+        var: subnet_name_id_dict
+        verbosity: 2
+
+    - name: Create Instance(s) in EC2
+      ec2_instance:
+        region: "{{ aws_region }}"
+        state: present
+        key_name: "{{ aws_key_name }}"
+        instance_type: "{{ aws_instance_type }}"
+        image_id: "{{ ec2_ami_facts_results.images[(((ec2_ami_facts_results.images | length) - 1) | int)].image_id }}"
+        vpc_subnet_id: "{{ subnet_name_id_dict[app_prefix + '-' + hostvars[item].subnet] }}"
+        security_group: "{{ app_prefix }}-security-group"
+        name: "{{ item }}.{{ app_prefix }}.{{ aws_infra_zone }}"
+        network:
+          assign_public_ip: true
+        wait: no
+      register: ec2_instance_results
+      with_items:
+        - "{{ groups['web'] }}"
+
+    - name: Debug ec2_instance_results
+      debug:
+        var: ec2_instance_results
+        verbosity: 2
+
+    - name: Set my_instances
+      set_fact:
+        my_instances: "{{ ec2_instance_results.results | map(attribute='instances') | flatten }}"
+
+    - name: Debug my_instances
+      debug:
+        var: my_instances
+        verbosity: 2
+
+    # Use instance id to get around filters for instance state since the instances are pending || running
+    - name: Gather Instance Facts
+      ec2_instance_facts:
+        region: "{{ aws_region }}"
+        filters:
+          instance-id: "{{ item.instance_id }}"
+      register: ec2_instance_facts_results
+      with_items:
+        - "{{ my_instances }}"
+
+    - name: Debug ec2_instance_facts_results
+      debug:
+        var: ec2_instance_facts_results
+        verbosity: 2
+
+    - name: Set my_instance_facts
+      set_fact:
+        my_instance_facts: "{{ ec2_instance_facts_results.results | map(attribute='instances') | flatten }}"
+
+    - name: Debug my_instance_facts
+      debug:
+        var: my_instance_facts
+        verbosity: 2
+
+    - name: Create DNS Entries in Route53
+      route53:
+        state: create
+        zone: "{{ aws_infra_zone }}"
+        record: "{{ item.tags.Name }}."
+        type: A
+        value: "{{ item.public_ip_address }}"
+      with_items:
+        - "{{ my_instance_facts }}"
+
+    - name: Populate elb_subnet_ids
+      set_fact:
+        elb_subnet_ids: "{{ elb_subnet_ids | default([]) }} + [ '{{ item.subnet_id }}' ]"
+      with_items: "{{ my_instance_facts }}"
+
+    - name: Debug elb_subnet_ids
+      debug:
+        var: elb_subnet_ids
+        verbosity: 2
+
+    - name: Create ELB
+      ec2_elb_lb:
+        name: "{{ app_prefix }}-elb"
+        region: "{{ aws_region }}"
+        state: present
+        subnets: "{{ elb_subnet_ids }}"
+        security_group_names: "{{ app_prefix }}-security-group"
+        connection_draining_timeout: 5
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80
+        health_check:
+          ping_protocol: http
+          ping_port: 80
+          ping_path: /monitor.html
+          response_timeout: 5
+          interval: 15
+          unhealthy_threshold: 2
+          healthy_threshold: 2
+      register: my_elb
+
+    - name: Debug my_elb
+      debug:
+        var: my_elb
+        verbosity: 2
+
+    - name: Add Instances to ELB
+      ec2_elb:
+        ec2_elbs: "{{ app_prefix }}-elb"
+        region: "{{ aws_region }}"
+        state: present
+        wait: no
+        instance_id: "{{ item.instance_id }}"
+      with_items:
+        - "{{ my_instance_facts }}"
+
+    - name: Create ELB Alias
+      route53:
+        state: present
+        zone: "{{ aws_infra_zone }}"
+        record: "app.{{ app_prefix }}.{{ aws_infra_zone }}."
+        type: A
+        value: "{{ my_elb.elb.hosted_zone_name }}"
+        alias: true
+        alias_hosted_zone_id: "{{ my_elb.elb.hosted_zone_id }}"
+        overwrite: yes
+
+    - name: Get RDS Instance Facts
+      rds_instance_facts:
+        region: "{{ aws_region }}"
+        db_instance_identifier: "{{ app_prefix }}-database"
+      register: rds_instance_facts_results
+      delegate_to: localhost
+
+    - name: Debug rds_instance_facts_results
+      debug:
+        var: rds_instance_facts_results
+        verbosity: 2
+
+    - name: Create rds_endpoint_address
+      set_fact:
+        rds_endpoint_address: "{{ rds_instance_facts_results.instances[0].endpoint.address }}"
+
+    - name: Debug rds_endpoint_address
+      debug:
+        var: rds_endpoint_address
+        verbosity: 2
+
+    - name: Create Dynamic Inventory
+      add_host:
+        name: "{{ item.tags.Name }}"
+        groups: dynamic_inventory
+        ansible_ssh_host: "{{ item.public_ip_address }}"
+      with_items:
+        - "{{ my_instance_facts }}"
+
+    - name: Ensure Hosts Are Running
+      wait_for:
+        port: 22
+        host: "{{ item.public_ip_address }}"
+        search_regex: OpenSSH
+      with_items:
+        - "{{ my_instance_facts }}"
+
+- name: Configure VMs & Deploy Application
+  hosts: dynamic_inventory
+  become: yes
+  tasks:
+    - name: Enable Software Collections Repo
+      ini_file:
+        dest: /etc/yum.repos.d/redhat-rhui.repo
+        section: rhui-REGION-rhel-server-rhscl
+        option: enabled
+        value: 1
+
+    - name: Install Packages
+      yum:
+        name:
+          - "vim-enhanced"
+          - "httpd24"
+          - "httpd24-mod_ssl"
+          - "rh-php71"
+          - "rh-php71-php"
+          - "rh-php71-php-mysqlnd"
+          - "git"
+          - "MySQL-python"
+          - "mariadb"
+        state: latest
+
+    - name: Copy Database Script to First Host Only
+      template:
+        src: templates/database.sql.j2
+        dest: /tmp/database.sql
+        mode: 0400
+      when: inventory_hostname == groups['dynamic_inventory'][0]
+
+    - name: Configure Database on First Host Only
+      mysql_db:
+        login_host: "{{ hostvars['localhost']['rds_endpoint_address'] }}"
+        login_user: "{{ app_database_username }}"
+        login_password: "{{ app_database_password }}"
+        name: "{{ app_database_name }}"
+        state: import
+        target: /tmp/database.sql
+      when: inventory_hostname == groups['dynamic_inventory'][0]
+
+    - name: Allow httpd Service to Connect to Databases
+      seboolean:
+        name: httpd_can_network_connect_db
+        state: yes
+        persistent: yes
+
+    - name: Deploy Application Configuration
+      template:
+        src: templates/credentials.php.j2
+        dest: /opt/rh/httpd24/root/var/www/credentials.php
+        owner: apache
+        group: root
+        mode: 0400
+
+    - name: Deploy Application Source
+      git:
+        repo: "{{ app_source }}"
+        dest: /opt/rh/httpd24/root/var/www/html
+        force: yes
+
+    - name: Create Monitor
+      copy:
+        remote_src: yes
+        src: /dev/null
+        dest: /opt/rh/httpd24/root/var/www/html/monitor.html
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Start Apache Service
+      systemd:
+        name: httpd24-httpd
+        state: started
+        enabled: yes
