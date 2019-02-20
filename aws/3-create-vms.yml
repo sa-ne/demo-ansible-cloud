@@ -127,6 +127,8 @@
         value: "{{ item.public_ip_address }}"
       with_items:
         - "{{ my_instance_facts }}"
+      tags:
+        - dns
 
     - name: Populate elb_subnet_ids
       set_fact:
@@ -185,6 +187,8 @@
         alias: true
         alias_hosted_zone_id: "{{ my_elb.elb.hosted_zone_id }}"
         overwrite: yes
+      tags:
+        - dns
 
     - name: Get RDS Instance Facts
       rds_instance_facts:
