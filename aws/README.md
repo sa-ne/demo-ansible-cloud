@@ -185,5 +185,5 @@ ansible-playbook -i inventory.yml --skip-tags dns delete-environment.yml
 # External Links
 
 [1] - https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html <br />
-[2] - https://docs.ansible.com/ansible/latest/scenario_guides/guide_aws.html
+[2] - https://docs.ansible.com/ansible/latest/scenario_guides/guide_aws.html <br />
 [3] - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html
