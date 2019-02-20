@@ -1,4 +1,5 @@
 ---
+aws_cidr_network: 10.250.0.0/16
 subnets:
   - name: "{{ app_prefix }}-us-east-1a"
     az: us-east-1a
