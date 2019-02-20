@@ -155,7 +155,7 @@
           ping_port: 80
           ping_path: /monitor.html
           response_timeout: 5
-          interval: 15
+          interval: 10
           unhealthy_threshold: 2
           healthy_threshold: 2
       register: my_elb
