@@ -1,0 +1,91 @@
+---
+- name: Build Inventory
+  hosts: localhost
+  tasks:
+    - name: Gather Instance Facts
+      ec2_instance_facts:
+        region: "{{ aws_region }}"
+        filters:
+          instance-state-name: running
+          "tag:Name": "{{ item }}.{{ app_prefix }}.{{ aws_infra_zone }}"
+      register: ec2_instance_facts_results
+      with_items:
+        - "{{ groups['web'] }}"
+
+    - name: Debug ec2_instance_facts_results
+      debug:
+        var: ec2_instance_facts_results
+        verbosity: 2
+
+    - name: Set my_instance_facts
+      set_fact:
+        my_instance_facts: "{{ ec2_instance_facts_results.results | map(attribute='instances') | flatten }}"
+
+    - name: Debug my_instance_facts
+      debug:
+        var: my_instance_facts
+        verbosity: 2
+
+    - name: Create Dynamic Inventory
+      add_host:
+        name: "{{ item.tags.Name }}"
+        groups: dynamic_inventory
+        ansible_ssh_host: "{{ item.public_ip_address }}"
+      with_items:
+        - "{{ my_instance_facts }}"
+
+- name: Perform Rolling Update in Serial
+  hosts: dynamic_inventory
+  serial: 1
+  become: yes
+  tasks:
+    - name: Remove Monitor
+      file:
+        path: /opt/rh/httpd24/root/var/www/html/monitor.html
+        state: absent
+ 
+    - name: Wait for Probe to Update
+      pause:
+        seconds: 20
+
+    - name: Stop httpd
+      systemd:
+        service: httpd24-httpd
+        state: stopped
+
+    - name: Apply VM Patches
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Reboot VM
+      shell: "sleep 5 && reboot"
+      async: 1
+      poll: 0
+
+    - name: Wait for VM to Recover
+      wait_for:
+        host: "{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}"
+        port: 80
+      connection: local 
+
+    - name: Ensure SSH is Available
+      wait_for:
+        port: 22
+        host: "{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}"
+        search_regex: OpenSSH
+      vars:
+        ansible_connection: local
+
+    - name: Create Monitor
+      copy:
+        remote_src: yes
+        src: /dev/null
+        dest: /opt/rh/httpd24/root/var/www/html/monitor.html
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Wait for Probe to Update
+      pause:
+        seconds: 20

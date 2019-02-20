@@ -1,0 +1,156 @@
+---
+- name: Create Application VPC & Associated Components for Application
+  hosts: localhost
+  tasks:
+    - name: Include Subnet Definitions for Various AWS Regions
+      include_vars:
+        file: subnets/subnets-us-east-1.yml
+      when: aws_region == "us-east-1"
+
+    - name: Create Application VPC
+      ec2_vpc_net:
+        region: "{{ aws_region }}"
+        cidr_block: "{{ aws_cidr_network }}"
+        dns_hostnames: yes
+        dns_support: yes
+        name: "{{ app_prefix }}-vpc"
+        state: present
+      register: vpc_results
+      until: vpc_results.failed is not defined or vpc_results.failed == false
+      retries: 3
+      delay: 5
+
+    - name: Debug vpc_results
+      debug:
+        var: vpc_results
+        verbosity: 2
+
+    - name: Create Database Security Group
+      ec2_group:
+        name: "{{ app_prefix }}-database-security-group"
+        description: "Database Security Group for Application {{ app_prefix }}"
+        vpc_id: "{{ vpc_results.vpc.id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 3306
+            cidr_ip: "{{ aws_cidr_network }}"
+            rule_desc: "Allow Database Traffic from VPC"
+        tags:
+          Name: "{{ app_prefix }}-database-security-group"
+      register: ec2_database_group_results
+
+    - name: Debug ec2_database_group_results
+      debug:
+        var: ec2_database_group_results
+        verbosity: 2
+
+    - name: Create Web Security Group
+      ec2_group:
+        name: "{{ app_prefix }}-security-group"
+        description: "Security Group for Application {{ app_prefix }}"
+        vpc_id: "{{ vpc_results.vpc.id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 80
+              - 443
+              - 8080
+            cidr_ip: 0.0.0.0/0
+            rule_desc: "Allow Web Traffic"
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: "Allow SSH Traffic"
+        tags:
+          Name: "{{ app_prefix }}-security-group"
+      register: ec2_group_results
+
+    - name: Debug ec2_group_results
+      debug:
+        var: ec2_group_results
+        verbosity: 2
+
+    - name: Create Subnets in VPC
+      ec2_vpc_subnet:
+        az: "{{ item.az }}"
+        cidr: "{{ item.cidr }}"
+        region: "{{ item.region }}"
+        state: present
+        tags:
+          Name: "{{ item.name }}"
+        vpc_id: "{{ vpc_results.vpc.id }}"
+      register: subnet_results
+      until: subnet_results.failed is not defined or subnet_results.failed == false
+      retries: 3
+      delay: 5
+      with_items:
+        - "{{ subnets }}"
+
+    - name: Debug subnet_results
+      debug:
+        var: subnet_results
+        verbosity: 2
+
+    - name: Set my_vpc_subnets for Easier Access
+      set_fact:
+        my_vpc_subnets: "{{ subnet_results.results | map(attribute='subnet') | flatten }}"
+
+    - name: Debug my_vpc_subnets
+      debug:
+        var: my_vpc_subnets
+        verbosity: 2
+
+    - name: Set rt_subnets
+      set_fact:
+        rt_subnets: "{{ rt_subnets | default([]) }} + ['{{ item.id }}']"
+      with_items:
+        - "{{ my_vpc_subnets }}"
+
+    - name: Debug rt_subnets
+      debug:
+        var: rt_subnets
+        verbosity: 2
+
+    - name: Create VPC Internet Gateway
+      ec2_vpc_igw:
+        region: "{{ aws_region }}"
+        state: present
+        tags:
+          Name: "{{ app_prefix }}-igw"
+        vpc_id: "{{ vpc_results.vpc.id }}"
+      register: igw_results
+
+    - name: Debug igw_results
+      debug:
+        var: igw_results
+        verbosity: 2
+
+    - name: Get VPC Route Table Facts
+      ec2_vpc_route_table_facts:
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ vpc_results.vpc.id }}"
+      register: rt_facts_results
+
+    - name: Debug rt_facts_results
+      debug:
+        var: rt_facts_results
+        verbosity: 2
+
+    - name: Setup VPC Route Table
+      ec2_vpc_route_table:
+        lookup: id
+        purge_routes: false
+        region: "{{ aws_region }}"
+        route_table_id: "{{ rt_facts_results.route_tables[0].id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ igw_results.gateway_id }}"
+        subnets: "{{ rt_subnets }}"
+        tags:
+          Name: "{{ app_prefix }}-route-table"
+        vpc_id: "{{ vpc_results.vpc.id }}"
