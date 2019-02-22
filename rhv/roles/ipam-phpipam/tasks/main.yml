@@ -24,8 +24,6 @@
       phpipam-token: "{{ ipam_session.json.data.token }}"
     validate_certs: false
   register: ipam_subnet_ids
-  when:
-    - hostvars[item].ipam_cidr is defined
   with_items:
     - "{{ groups[provision_group] }}"
 
@@ -37,8 +35,6 @@
 - name: Combine Subnet IDs and Hostnames into Dictionary for Easy Lookup
   set_fact:
     subnet_id_name_dict: "{{ subnet_id_name_dict | default({}) | combine({ item.0: item.1.json.data[0].id }) }}"
-  when:
-    - item.1.skipped is not defined
   with_together:
     - "{{ groups[provision_group] }}"
     - "{{ ipam_subnet_ids.results }}"
@@ -57,8 +53,6 @@
       phpipam-token: "{{ ipam_session.json.data.token }}"
     validate_certs: false
   register: ipam_subnet_properties
-  when:
-    - hostvars[item].ipam_cidr is defined
   with_items:
     - "{{ groups[provision_group] }}"
 
@@ -79,8 +73,6 @@
       hostname: "{{ item }}"
     body_format: json
   register: ipam_instance_ips
-  when:
-    - hostvars[item].ipam_cidr is defined
   with_items:
     - "{{ groups[provision_group] }}"
 
@@ -102,8 +94,6 @@
           }
         })
       }}
-  when:
-    - hostvars[item.0].ipam_cidr is defined
   with_together:
     - "{{ groups[provision_group] }}"
     - "{{ ipam_subnet_properties.results }}"
