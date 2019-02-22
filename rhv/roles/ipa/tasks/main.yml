@@ -1,0 +1,86 @@
+---
+- name: Generate Host OTP
+  shell: /usr/bin/openssl rand -hex 10
+  register: ipa_otp
+
+- set_fact:
+    ipa_otp: "{{ ipa_otp.stdout }}"
+
+- name: Debug ipa_otp
+  debug:
+    var: ipa_otp
+    verbosity: 2
+
+- name: Generate IPA Session Cookie
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/login_password"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+      Accept: "text/plain"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body: "user={{ ipa_username }}&password={{ ipa_password }}"
+  register: ipa_session
+
+- name: Debug ipa_session
+  debug:
+    var: ipa_session
+    verbosity: 2
+
+- name: Create Host in IPA
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: host_add
+      params:
+      - - "{{ item }}."
+      - ip_address: "{{ network_name_dict[item].ip }}"
+    body_format: json
+  register: ipa_host_add
+  failed_when: "ipa_host_add.json.error is not none"
+  with_items:
+    - "{{ groups[provision_group] }}"
+  tags:
+    - pre
+
+- name: Debug ipa_host_add
+  debug:
+    var: ipa_host_add
+    verbosity: 2
+  tags:
+    - pre
+
+- name: Assign OTP to Host
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: host_mod
+      params:
+      - - "{{ item }}"
+      - userpassword: "{{ ipa_otp }}"
+    body_format: json
+  register: ipa_host_mod
+  failed_when: "ipa_host_mod.json.error is not none"
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipa_host_mod
+  debug:
+    var: ipa_host_mod
+    verbosity: 2

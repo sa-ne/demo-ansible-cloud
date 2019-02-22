@@ -1,0 +1,21 @@
+---
+- name: Combine Applicable Subnet Properties, IPs and Hostnames into Dictionary for Easy Lookup
+  set_fact:
+    network_name_dict: >-
+      {{
+        network_name_dict | default({}) | combine({
+          item: {
+            'gateway': hostvars[item].gateway,
+            'mask': hostvars[item].mask,
+            'nameservers': hostvars[item].nameservers,
+            'ip': hostvars[item].ip
+          }
+        })
+      }}
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug network_name_dict
+  debug:
+    var: network_name_dict
+    verbosity: 2

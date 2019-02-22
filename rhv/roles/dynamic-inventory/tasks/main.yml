@@ -1,0 +1,24 @@
+---
+- name: Handle Single Host
+  set_fact:
+    instances:
+    - name: "{{ instance_name }}"
+      ip: "{{ instance_ip }}"
+      netmask: "{{ instance_netmask }}"
+      gateway: "{{ instance_gateway }}"
+      dns: "{{ instance_dns }}"
+      search: "{{ instance_search }}"
+      memory: "{{ instance_memory }}"
+      sockets: "{{ instance_sockets }}"
+      cores: "{{ instance_cores }}"
+      threads: "{{ instance_threads }}"
+      template: "{{ instance_template }}"
+  when: instances is not defined
+
+- name: Populate In-Memory Inventory
+  add_host:
+    hostname: "{{ item.name }}"
+    ansible_ssh_host: "{{ item.ip }}"
+    groups: dynamic_inventory
+  with_items:
+    - "{{ instances }}"

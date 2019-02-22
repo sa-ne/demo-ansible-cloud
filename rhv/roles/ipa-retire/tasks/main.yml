@@ -1,0 +1,43 @@
+---
+- name: Generate IPA Session Cookie
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/login_password"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+      Accept: "text/plain"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body: "user={{ ipa_username }}&password={{ ipa_password }}"
+  register: ipa_session
+
+- name: Debug ipa_session
+  debug:
+    var: ipa_session
+    verbosity: 2
+
+- name: Delete Host from IPA
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: host_del
+      params:
+      - - "{{ item }}"
+      - updatedns: true
+    body_format: json
+  register: ipa_host_del
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipa_host_del
+  debug:
+    var: ipa_host_del
+    verbosity: 2
