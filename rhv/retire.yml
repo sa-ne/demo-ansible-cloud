@@ -28,5 +28,6 @@
   vars_files:
     - vault.yml
   roles:
+    - role: satellite-retire
     - role: rhv-retire
     - role: ipa-retire

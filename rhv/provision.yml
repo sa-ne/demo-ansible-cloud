@@ -9,6 +9,20 @@
     - role: ipam-phpipam
       when: ipam_phpipam
     - role: ipa
-      tags:
-        - ipa
     - role: rhv
+    - role: dynamic-inventory
+
+- name: Configure VMs
+  hosts: dynamic_inventory
+  vars_files:
+    - vault.yml
+  roles:
+    - role: satellite
+  tasks:
+    - name: Install ipa-client Package
+      yum:
+        name: ipa-client
+        state: latest
+
+    - name: Register to IdM
+      shell: /usr/sbin/ipa-client-install -w "{{ hostvars['localhost']['ipa_otp'] }}" --mkhomedir -U
