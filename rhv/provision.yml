@@ -9,3 +9,6 @@
     - role: ipam-phpipam
       when: ipam_phpipam
     - role: ipa
+      tags:
+        - ipa
+    - role: rhv

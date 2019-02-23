@@ -1,0 +1,136 @@
+---
+- name: Create VMs
+  ovirt_vm:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    state: stopped
+    delete_protected: False
+    template: "{{ hostvars[item].template }}"
+    name: "{{ item }}"
+    cluster: "{{ rhv_cluster }}"
+    memory: "{{ hostvars[item].memory }}"
+    cpu_sockets: "{{ hostvars[item].sockets }}"
+    cpu_cores: "{{ hostvars[item].cores }}"
+  register: ovirt_vm_results
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ovirt_vm_results
+  debug:
+    var: ovirt_vm_results
+    verbosity: 2
+
+- name: Get VM Facts
+  ovirt_vm_facts:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    fetch_nested: True
+    nested_attributes: True
+    pattern: name={{ item }} and cluster={{ rhv_cluster }}
+  with_items:
+    - "{{ groups[provision_group] }}"
+  register: ovirt_vm_facts_results
+
+- name: Debug ovirt_vm_facts_results
+  debug:
+    var: ovirt_vm_facts_results
+    verbosity: 2
+
+- name: Ensure Template Disk is Bootable & Change Name
+  ovirt_disk:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    id: "{{ item.1.ansible_facts.ovirt_vms[0].disk_attachments[0].id }}"
+    bootable: yes
+    name: "{{ item.0 }}-os"
+    vm_name: "{{ item.0 }}"
+  with_together:
+    - "{{ groups[provision_group] }}"
+    - "{{ ovirt_vm_facts_results.results }}"
+
+- name: Combine Applicable Disks & Hostnames into Dictionary for Easy Lookup
+  set_fact:
+    disk_name_dict: >-
+      {{
+        disk_name_dict | default([]) +
+        [
+          {
+            'name': item,
+            'disks': hostvars[item].disks | default([])
+          }
+        ]
+      }}
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Add Additional Disks to VMs
+  ovirt_disk:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    name: "{{ item.0.name }}-{{ item.1.name }}"
+    vm_name: "{{ item.0.name }}"
+    size: "{{ item.1.size }}"
+    format: "{{ item.1.format }}"
+    interface: "{{ item.1.interface }}"
+    storage_domain: "{{ item.1.storage_domain }}"
+  with_subelements:
+    - "{{ disk_name_dict }}"
+    - disks
+    - skip_missing: True
+
+- name: Start VMs
+  ovirt_vm:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    state: running
+    name: "{{ item }}"
+    cluster: "{{ rhv_cluster }}"
+    cloud_init:
+      host_name: "{{ item }}"
+      user_name: root
+      root_password: "{{ root_password }}"
+      dns_servers: "{{ network_name_dict[item].nameservers }}"
+      dns_search: "{{ hostvars[item].search }}"
+      nic_boot_protocol: static
+      nic_ip_address: "{{ network_name_dict[item].ip }}"
+      nic_netmask: "{{ network_name_dict[item].mask }}"
+      nic_gateway: "{{ network_name_dict[item].gateway }}"
+      nic_name: eth0
+      nic_on_boot: True
+      custom_script: |
+        runcmd:
+        - /usr/bin/sed -i '/192.168.122.1/d' /etc/resolv.conf
+    cloud_init_persist: yes
+  register: start_vms
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug start_vms
+  debug:
+    var: start_vms
+    verbosity: 2
+
+- name: Wait for SSH
+  wait_for:
+    host: "{{ item }}"
+    search_regex: OpenSSH
+    port: 22
+    timeout: 640
+  connection: local
+  with_items:
+    - "{{ groups[provision_group] }}"

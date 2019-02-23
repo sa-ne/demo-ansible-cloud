@@ -17,7 +17,9 @@
       lineinfile:
         dest: ~/.ssh/known_hosts
         state: absent
-        regexp: "^.*{{ hostvars[item].ansible_host }}.*$"
+        regexp: "^.*{{ hostvars[item].ip }}.*$"
+      when:
+        - ipam_inventory 
       with_items:
         - "{{ groups[provision_group] }}"
 
@@ -26,4 +28,5 @@
   vars_files:
     - vault.yml
   roles:
+    - role: rhv-retire
     - role: ipa-retire
