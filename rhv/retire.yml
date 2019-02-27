@@ -31,3 +31,4 @@
     - role: satellite-retire
     - role: rhv-retire
     - role: ipa-retire
+    - role: ipam-phpipam-retire
