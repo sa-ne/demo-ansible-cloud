@@ -1,0 +1,143 @@
+---
+- name: Last Mile OSE Config (Updated for 3.11)
+  hosts: localhost
+  vars_files:
+    - vault.yml
+  roles:
+    - role: dynamic-inventory
+  tasks:
+    - name: Generate IPA Session Cookie
+      uri:
+        url: "https://{{ ipa_hostname }}/ipa/session/login_password"
+        validate_certs: no
+        method: POST
+        status_code: 200
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+          Accept: "text/plain"
+          Referer: "https://{{ ipa_hostname }}/ipa"
+        body: "user={{ ipa_username }}&password={{ ipa_password }}"
+      register: ipa_session
+
+    - name: Debug ipa_session
+      debug:
+        var: ipa_session
+        verbosity: 2
+
+    - name: Update masters A Record to Include All Masters
+      uri:
+        url: "https://{{ ipa_hostname }}/ipa/session/json"
+        validate_certs: no
+        method: POST
+        status_code: 200
+        headers:
+          Cookie: "{{ ipa_session.set_cookie }}"
+          Accept: "application/json"
+          Referer: "https://{{ ipa_hostname }}/ipa"
+        body:
+          method: dnsrecord_add
+          params:
+          - - "{{ hostvars[item].search }}."
+            - masters
+          - a_part_ip_address: "{{ lookup('dig', item) }}"
+            structured: true
+        body_format: json
+      register: host_add_masters
+      with_items:
+        - "{{ groups[provision_group] }}"
+      when: item is search("master")
+
+    - name: Debug host_add_masters
+      debug:
+        var: host_add_masters
+        verbosity: 2
+
+    - name: Update *.apps A Record to Include All Infrastructure Nodes
+      uri:
+        url: "https://{{ ipa_hostname }}/ipa/session/json"
+        validate_certs: no
+        method: POST
+        status_code: 200
+        headers:
+          Cookie: "{{ ipa_session.set_cookie }}"
+          Accept: "application/json"
+          Referer: "https://{{ ipa_hostname }}/ipa"
+        body:
+          method: dnsrecord_add
+          params:
+          - - "{{ hostvars[item].search }}."
+            - "*.apps"
+          - a_part_ip_address: "{{ lookup('dig', item) }}"
+            structured: true
+        body_format: json
+      register: host_add_apps
+      with_items:
+        - "{{ groups[provision_group] }}"
+      when: item is search("infra")
+
+    - name: Debug host_add_apps
+      debug:
+        var: host_add_apps
+        verbosity: 2
+
+- name: Configure Hosts
+  hosts: dynamic_inventory
+  tasks:
+    - name: Wait for SSH
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        search_regex: OpenSSH
+        port: 22
+        timeout: 640
+      connection: local
+
+    - name: Install Packages for OpenShift
+      yum:
+        name:
+          - wget
+          - git
+          - net-tools
+          - bind-utils
+          - yum-utils
+          - iptables-services
+          - bridge-utils
+          - bash-completion
+          - kexec-tools
+          - sos
+          - psacct
+          - openshift-ansible
+          - docker
+          - vim-enhanced
+        state: latest
+    
+    - name: yum update
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Setup /etc/sysconfig/docker
+      copy:
+        src: files/docker
+        dest: /etc/sysconfig/docker
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Setup /etc/sysconfig/docker-storage-setup
+      copy:
+        src: files/docker-storage-setup
+        dest: /etc/sysconfig/docker-storage-setup
+        owner: root
+        group: root
+        mode: 0644
+    
+    - name: Configure Docker Storage
+      shell: /usr/bin/docker-storage-setup &>/tmp/docker-storage-setup.log
+      args:
+        creates: /tmp/docker-storage-setup.log
+    
+    - name: Enable & Start Docker Service
+      service:
+        name: docker
+        state: started
+        enabled: yes

@@ -16,6 +16,12 @@ Now we can install the required Python package dependencies in our virtual envir
 pip install ovirt-ansible ovirt-engine-sdk-python
 ```
 
+The roles contained in this demo also require the use of `dnspython` and `netaddr` packages.
+
+```bash
+pip install dnspython netaddr
+```
+
 For good measure, source our virtual environment again.
 
 ```bash
