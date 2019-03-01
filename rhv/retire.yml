@@ -5,23 +5,25 @@
     # Fixes selinux issue w/ virtualenv
     ansible_python_interpreter: "/usr/bin/python"
   tasks:
-    - name: Remove Lines w/ Inventory Hostname in File
-      lineinfile:
-        dest: ~/.ssh/known_hosts
-        state: absent
-        regexp: "^.*{{ item }}.*$"
-      with_items:
-        - "{{ groups[provision_group] }}"
-
-    - name: Remove Lines w/ Inventory IP in File
-      lineinfile:
-        dest: ~/.ssh/known_hosts
-        state: absent
-        regexp: "^.*{{ hostvars[item].ip }}.*$"
+    - name: Clean up ~/.ssh/known_hosts
+      block:
+        - name: Remove Lines w/ Inventory Hostname in known_hosts
+          lineinfile:
+            dest: ~/.ssh/known_hosts
+            state: absent
+            regexp: "^.*{{ item }}.*$"
+          with_items:
+            - "{{ groups[provision_group] }}"
+    
+        - name: Remove Lines w/ Inventory IP in known_hosts
+          lineinfile:
+            dest: ~/.ssh/known_hosts
+            state: absent
+            regexp: "^.*{{ lookup('dig', item) }}.*$"
+          with_items:
+            - "{{ groups[provision_group] }}"
       when:
-        - ipam_inventory 
-      with_items:
-        - "{{ groups[provision_group] }}"
+        - cleanup_known_hosts
 
 - name: Retire Integrated VMs in Bulk
   hosts: localhost
@@ -32,3 +34,4 @@
     - role: rhv-retire
     - role: ipa-retire
     - role: ipam-phpipam-retire
+      when: ipam_phpipam
