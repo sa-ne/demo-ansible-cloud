@@ -1,0 +1,68 @@
+- name: Generate IPA Session Cookie
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/login_password"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+      Accept: "text/plain"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body: "user={{ ipa_username }}&password={{ ipa_password }}"
+  register: ipa_session
+
+- name: Debug ipa_session
+  debug:
+    var: ipa_session
+    verbosity: 2
+
+- name: Update masters A Record to Include All Masters
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: dnsrecord_add
+      params:
+      - - "{{ hostvars[item].search }}."
+        - masters
+      - a_part_ip_address: "{{ lookup('dig', item) }}"
+        structured: true
+    body_format: json
+  register: host_add_masters
+  with_items:
+    - "{{ groups[provision_group] }}"
+  when: item is search("master")
+
+- name: Update *.apps A Record to Include All Infrastructure Nodes
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: dnsrecord_add
+      params:
+      - - "{{ hostvars[item].search }}."
+        - "*.apps"
+      - a_part_ip_address: "{{ lookup('dig', item) }}"
+        structured: true
+    body_format: json
+  register: host_add_apps
+  with_items:
+    - "{{ groups[provision_group] }}"
+  when: item is search("infra")
+
+- name: Debug host_add_apps
+  debug:
+    var: host_add_apps
+    verbosity: 2
