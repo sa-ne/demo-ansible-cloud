@@ -1,0 +1,20 @@
+---
+- name: Populate In-Memory Inventory (ipam-inventory)
+  add_host:
+    hostname: "{{ item }}"
+    ansible_host: "{{ hostvars[item].ip }}"
+    groups: dynamic_inventory
+  when:
+    - ipam_inventory
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Populate In-Memory Inventory (via DNS)
+  add_host:
+    hostname: "{{ item }}"
+    ansible_host: "{{ lookup('dig', item) }}"
+    groups: dynamic_inventory
+  when:
+    - ipam_phpipam
+  with_items:
+    - "{{ groups[provision_group] }}"

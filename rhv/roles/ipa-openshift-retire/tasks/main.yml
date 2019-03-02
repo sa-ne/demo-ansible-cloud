@@ -1,0 +1,71 @@
+- name: Generate IPA Session Cookie
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/login_password"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+      Accept: "text/plain"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body: "user={{ ipa_username }}&password={{ ipa_password }}"
+  register: ipa_session
+
+- name: Debug ipa_session
+  debug:
+    var: ipa_session
+    verbosity: 2
+
+- name: Delete *.apps From DNS
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: dnsrecord_del
+      params:
+      - - "{{ hostvars[item].search }}."
+        - "*.apps"
+      - del_all: true
+    body_format: json
+  register: dns_delete_apps
+  with_items:
+    - "{{ groups[provision_group] }}"
+  when: item is search("master1")
+
+- name: Debug dns_delete_apps
+  debug:
+    var: dns_delete_apps
+    verbosity: 2
+
+- name: Delete masters From DNS
+  uri:
+    url: "https://{{ ipa_hostname }}/ipa/session/json"
+    validate_certs: no
+    method: POST
+    status_code: 200
+    headers:
+      Cookie: "{{ ipa_session.set_cookie }}"
+      Accept: "application/json"
+      Referer: "https://{{ ipa_hostname }}/ipa"
+    body:
+      method: dnsrecord_del
+      params:
+      - - "{{ hostvars[item].search }}."
+        - masters
+      - del_all: true
+    body_format: json
+  register: dns_delete_masters
+  with_items:
+    - "{{ groups[provision_group] }}"
+  when: item is search("master1")
+
+- name: Debug dns_delete_masters
+  debug:
+    var: dns_delete_masters
+    verbosity: 2

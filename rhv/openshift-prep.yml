@@ -1,0 +1,13 @@
+---
+- name: Add *.apps and masters DNS Entries
+  hosts: localhost
+  vars_files:
+    - vault.yml
+  roles:
+    - role: dynamic-inventory
+    - role: ipa-openshift
+
+- name: Last Mile OSE Config (Updated for 3.11)
+  hosts: dynamic_inventory
+  roles:
+    - role: openshift-prep

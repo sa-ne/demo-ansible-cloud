@@ -1,0 +1,7 @@
+# /etc/sysconfig/docker
+
+OPTIONS="--selinux-enabled --log-driver=journald --signature-verification=false --insecure-registry 172.30.0.0/16"
+
+if [ -z "${DOCKER_CERT_PATH}" ]; then
+    DOCKER_CERT_PATH=/etc/docker
+fi

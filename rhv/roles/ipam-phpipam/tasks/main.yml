@@ -1,0 +1,105 @@
+---
+- name: Generate phpIPAM Token
+  uri:
+    method: POST
+    force_basic_auth: true
+    user: "{{ phpipam_username }}"
+    password: "{{ phpipam_password }}"
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/user/"
+    validate_certs: false
+  register: ipam_session
+
+- name: Debug phpIPAM Session Token
+  debug:
+    var: ipam_session.json.data.token
+    verbosity: 2
+
+- name: Query Subnet ID
+  uri:
+    method: GET
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/subnets/cidr/{{ hostvars[item].ipam_cidr }}"
+    headers:
+      phpipam-token: "{{ ipam_session.json.data.token }}"
+    validate_certs: false
+  register: ipam_subnet_ids
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipam_subnet_ids
+  debug:
+    var: ipam_subnet_ids
+    verbosity: 2
+
+- name: Combine Subnet IDs and Hostnames into Dictionary for Easy Lookup
+  set_fact:
+    subnet_id_name_dict: "{{ subnet_id_name_dict | default({}) | combine({ item.0: item.1.json.data[0].id }) }}"
+  with_together:
+    - "{{ groups[provision_group] }}"
+    - "{{ ipam_subnet_ids.results }}"
+
+- name: Debug subnet_id_name_dict
+  debug:
+    var: subnet_id_name_dict
+    verbosity: 2
+
+- name: Query Subnet Properties
+  uri:
+    method: GET
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/subnets/{{ subnet_id_name_dict[item] }}/"
+    headers:
+      phpipam-token: "{{ ipam_session.json.data.token }}"
+    validate_certs: false
+  register: ipam_subnet_properties
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipam_subnet_properties
+  debug:
+    var: ipam_subnet_properties.results
+    verbosity: 2
+
+- name: Request IPs for Instances
+  uri:
+    method: POST
+    status_code: 201
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/addresses/first_free/{{ subnet_id_name_dict[item] }}/"
+    headers:
+      phpipam-token: "{{ ipam_session.json.data.token }}"
+    validate_certs: false
+    body:
+      hostname: "{{ item }}"
+    body_format: json
+  register: ipam_instance_ips
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipam_instance_ips
+  debug:
+    var: ipam_instance_ips
+    verbosity: 2
+
+- name: Combine Applicable Subnet Properties, IPs and Hostnames into Dictionary for Easy Lookup
+  set_fact:
+    network_name_dict: >- 
+      {{ 
+        network_name_dict | default({}) | combine({
+          item.0: { 
+            'gateway': item.1.json.data.gateway.ip_addr, 
+            'mask': ((item.2.json.data + '/' + item.1.json.data.mask) | ipaddr('netmask')),
+            'nameservers': item.1.json.data.nameservers.namesrv1,
+            'ip': item.2.json.data
+          }
+        })
+      }}
+  with_together:
+    - "{{ groups[provision_group] }}"
+    - "{{ ipam_subnet_properties.results }}"
+    - "{{ ipam_instance_ips.results }}"
+
+- name: Debug network_name_dict
+  debug:
+    var: network_name_dict
+    verbosity: 2

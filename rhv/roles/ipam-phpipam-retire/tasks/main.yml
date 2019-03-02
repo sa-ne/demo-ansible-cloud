@@ -1,0 +1,46 @@
+---
+- name: Generate phpIPAM Token
+  uri:
+    method: POST
+    force_basic_auth: true
+    user: "{{ phpipam_username }}"
+    password: "{{ phpipam_password }}"
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/user/"
+    validate_certs: false
+  register: ipam_session
+
+- name: Debug phpIPAM Session Token
+  debug:
+    var: ipam_session.json.data.token
+    verbosity: 2
+
+- name: Search for IPs via Hostname
+  uri:
+    method: GET
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/addresses/search_hostname/{{ item }}/"
+    headers:
+      phpipam-token: "{{ ipam_session.json.data.token }}"
+    validate_certs: false
+  register: ipam_ip_ids
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Debug ipam_ip_ids
+  debug:
+    var: ipam_ip_ids
+    verbosity: 2
+
+- name: Delete IPs
+  uri:
+    method: DELETE
+    status_code: 200
+    url: "https://{{ phpipam_hostname }}/api/{{ phpipam_appid }}/addresses/{{ item.json.data[0].id }}/"
+    headers:
+      phpipam-token: "{{ ipam_session.json.data.token }}"
+    validate_certs: False
+  when:
+    - item.json.success
+  with_items:
+    - "{{ ipam_ip_ids.results }}"

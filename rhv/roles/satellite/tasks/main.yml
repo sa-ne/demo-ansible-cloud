@@ -1,0 +1,34 @@
+---
+- name: Install Satellite Certs
+  yum:
+    name: "http://{{ satellite_hostname }}/pub/katello-ca-consumer-latest.noarch.rpm"
+    state: present
+
+- name: Debug satellite_activation_key
+  debug:
+    var: satellite_activation_key
+    verbosity: 2
+
+- name: Register to Satellite
+  redhat_subscription:
+    activationkey: "{{ satellite_activation_key }}"
+    org_id: "{{ satellite_org_id }}"
+    server_hostname: "{{ satellite_hostname }}"
+    server_insecure: True
+    state: present
+
+- name: Install katello-agent & Access Insights Client
+  yum:
+    name:
+      - katello-agent
+      - insights-client
+    state: present
+
+- name: Enable goferd Service
+  service:
+    enabled: yes
+    name: goferd
+    state: started
+
+- name: Register Access Insights Client
+  shell: insights-client --register

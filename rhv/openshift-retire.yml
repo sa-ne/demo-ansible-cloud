@@ -1,0 +1,7 @@
+---
+- name: Delete OpenShift DNS Entries
+  hosts: localhost
+  vars_files:
+    - vault.yml
+  roles:
+    - role: ipa-openshift-retire

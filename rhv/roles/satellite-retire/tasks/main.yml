@@ -1,0 +1,12 @@
+---
+- name: Delete Hosts from Satellite
+  uri:
+    url: "https://{{ satellite_hostname }}/api/hosts/{{ item }}"
+    method: DELETE
+    user: "{{ satellite_username }}"
+    password: "{{ satellite_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    code: 200
+  with_items:
+    - "{{ groups[provision_group] }}"
