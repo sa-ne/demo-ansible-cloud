@@ -84,7 +84,7 @@ When provisioning OpenShift instances, make sure your activation key contains th
 
 ### Notes on phpIPAM
 
-When using phpIPAM, the host variable `ipam_cidr` is used. This CIDR block must be defined as a subnet in phpIPAM. This subnet must also be configured with the default gateway and DNS. I have created a role to assist with the installation of phpIPAM on RHEL 7 [2]. Gateways for subnets are defined by checking the appropriate checkbox on the applicable IP properties within the subnet. DNS configuration is handled in the actual subnet properties.
+When using phpIPAM, the host variable `ipam_cidr` is used. This CIDR block must be defined as a subnet in phpIPAM. This subnet must also be configured with the default gateway and DNS. I have created a role to assist with the installation of phpIPAM on RHEL 7 [2]. Gateways for subnets are defined by checking the appropriate checkbox on the applicable IP properties within the subnet. DNS configuration is handled in the actual subnet properties. You will also need to enable the API in the phpIPAM settings and create an API id.
 
 ## Prerequisites
 ### Configuring a Vault
