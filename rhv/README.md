@@ -44,10 +44,17 @@ The provisioner is a playbook that executes a series of roles and tasks to deplo
 |:---|:---|
 |dynammic-inventory|Generates a dynamic in-memory inventory used to affect changes on virtual machines we are provisioning. Hosts are placed in the `dynamic_inventory` group.|
 |ipa|Creates host accounts in IdM and assigns random one time passwords to these accounts.|
+|ipa-retire|Deletes previously provisioned host accounts in IdM|
 |ipam-inventory|Populates `network_name_dict`<sup>1</sup> based on variables defined in inventory file.|
 |ipam-phpipam|Populates `network_name_dict`<sup>1</sup> by requesting IPs and other network attributes from phpIPAM|
+|ipam-phpipam-retire|Frees up previously allocated IPs in phpIPAM|
+|ipa-openshift|Creates specific DNS entries to support an OpenShift installation|
+|ipa-openshift-retire|Removes previous created DNS entries|
+|openshift-prep|Prepares a node for the installation of OpenShift 3.11|
 |rhv|Provisions virtual machines in oVirt/RHV.|
+|rhv-retire|Removes virtual machines in oVirt/RHV|
 |satellite|Registers virtual machines to Satellite|
+|satellite-retire|Unregisters virtual machines from Satellite|
 
 Note <sup>1</sup>: The variable `network_name_dict` is used to define network information for all the virtual machines provisioned. This way any other IPAM solution could be used as long the user develops a role to set the variable.
 
@@ -66,6 +73,18 @@ network_name_dict:
     mask: 255.255.255.0
     nameservers: 172.16.10.11
 ```
+
+### Notes on IdM
+
+To make use of the IdM integration, you are required to have DNS management enabled and a zone supporting the DNS suffix for your environment (i.e. search parameter in your inventory file).
+
+### Notes on Satellite
+
+When provisioning OpenShift instances, make sure your activation key contains the appropriate repositories [1] per documentation.
+
+### Notes on phpIPAM
+
+When using phpIPAM, the host variable `ipam_cidr` is used. This CIDR block must be defined as a subnet in phpIPAM. This subnet must also be configured with the default gateway and DNS. I have created a role to assist with the installation of phpIPAM on RHEL 7 [2]. Gateways for subnets are defined by checking the appropriate checkbox on the applicable IP properties within the subnet. DNS configuration is handled in the actual subnet properties.
 
 ## Prerequisites
 ### Configuring a Vault
@@ -127,10 +146,11 @@ To support the installation of virtual machines on oVirt/RHV, we need to create 
 
 |Variable Name|Description|Example|
 |:---|:---|:---|
-|provision_group|Group in inventory that will be provisioned.|my\_vms|
-|ipam_phpipam|If True, use the ipam-phpipam role to acquire IPs and other network information (gateway, mask, DNS).|True/False|
-|ipam_inventory|If True, use the ipam-inventory role to define IPs and other network information (gateway, mask, DNS).|True/False|
+|provision\_group|Group in inventory that will be provisioned.|my\_vms|
+|ipam\_phpipam|If True, use the ipam-phpipam role to acquire IPs and other network information (gateway, mask, DNS).|True/False|
+|ipam\_inventory|If True, use the ipam-inventory role to define IPs and other network information (gateway, mask, DNS).|True/False|
 |satellite\_activation\_key|Activation key used to register virtual machines to Satellite|"My Activation Key"|
+|cleanup\_known\_hosts|Useful for iterative provisioning. Will remove references to hostnames/IPs in known\_hosts file based off inventory|True/False|
 
 #### Host Variables
 
@@ -163,7 +183,7 @@ The disk variable contains a list of attributes for each additional disk with th
 
 #### Example Inventory File (ipam-inventory)
 
-An example of a working inventory file for use with the ipam-inventory role is included below:
+An example of a working inventory file for use with the ipam-inventory role is included below (note the use of ip, gateway, mask and nameserver variables):
 
 ```yaml
 ---
@@ -214,7 +234,7 @@ all:
 
 #### Example Inventory File (ipam-phpipam)
 
-An example of a working inventory file for use with the ipam-phpipam role is included below:
+An example of a working inventory file for use with the ipam-phpipam role is included below (ipam_cidr is used instead of ip, mask, gateway and nameserver variables):
 
 ```yaml
 ---
@@ -256,3 +276,39 @@ all:
             interface: virtio_scsi
             storage_domain: nfs-vms
 ```
+
+## Provisioning n Number of Virtual Machines
+
+This demo will allow you to provison a series of virtual machines in RHV that are integrated with phpIPAM (optional), IdM and Satellite. To run the demo, simply configure your inventory file and vault as noted above and run the following command:
+
+`ansible-playbook --ask-vault-pass -u root -k -i inventory provision.yml`
+
+## Preparing Provisioned Virtual Machines for OpenShift
+
+This demo will allow you to configure the previously provisioned nodes for OpenShift 3.11.
+
+Some notes about this demo:
+
+* The hostname pattern for masters must be \*masterN\*.\* (i.e. master1.ose.local)
+* The hostname pattern for infrastructure nodes must be \*infra-nodeN\*.\* (i.e. infra-node1.ose.local)
+* Optionally, the hostname pattern for application nodes should be \*app-nodeN\*.\* (i.e. app-node1.ose.local)
+
+To prepare your previously provisioned nodes for OpenShift, run the following command:
+
+`ansible-playbook --ask-vault-pass -u root -k -i inventory openshift-prep.yml`
+
+## Retiring Virtual Machines
+
+This demo will free up IPs allocated in phpIPAM (optional), remove hosts from IdM and Satellite and delete the virtual machines in RHV. Run the following command to retire:
+
+`ansible-playbook --ask-vault-pass -i inventory.yml retire.yml`
+
+## Cleaning up OpenShift Artifacts
+
+As part of the OpenShift prep, a few DNS entries were created in IdM. To remove those entries, run the following:
+
+`ansible-playbook --ask-vault-pass -i inventory openshift-retire.yml`
+
+# External Links
+[1] - https://access.redhat.com/documentation/en-us/openshift_container_platform/3.11/html-single/installing_clusters/#host-registration </br>
+[2] - https://github.com/nasx/phpipam-install
