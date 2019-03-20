@@ -31,7 +31,15 @@
     - vault.yml
   roles:
     - role: satellite-retire
+      tags:
+        - satellite
     - role: rhv-retire
+      tags:
+        - rhv
     - role: ipa-retire
+      tags:
+        - ipa
     - role: ipam-phpipam-retire
       when: ipam_phpipam
+      tags:
+        - ipam

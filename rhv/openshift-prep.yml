@@ -6,8 +6,50 @@
   roles:
     - role: dynamic-inventory
     - role: ipa-openshift
+  tasks:
+    - name: Get Disk UUIDs
+      block:
+        - name: Get Disk Facts
+          ovirt_disk_facts:
+            auth:
+              username: "{{ rhv_username }}"
+              password: "{{ rhv_password }}"
+              url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+              insecure: True
+            pattern: "name={{ item }}-docker-disk"
+          register: ovirt_disk_facts_results
+          with_items:
+            - "{{ groups['dynamic_inventory'] }}"
+
+        - name: Create Docker Disk ID Dictionary
+          set_fact:
+            docker_disk_ids: "{{ docker_disk_ids | default([]) }} + ['{{ item.ansible_facts.ovirt_disks[0].id }}']"
+          with_items:
+            - "{{ ovirt_disk_facts_results.results }}"
+
+        - name: Debug docker_disk_ids
+          debug:
+            var: docker_disk_ids
+            verbosity: 2
+
+        - name: Create Docker Disk ID Host Mapping
+          set_fact:
+            docker_disk_id_host_mapping: "{{ docker_disk_id_host_mapping | default({}) | combine({ item.0: item.1[0:20] }) }}"
+          with_together:
+            - "{{ groups['dynamic_inventory'] }}"
+            - "{{ docker_disk_ids }}"
+
+        - name: Debug docker_disk_id_host_mapping
+          debug:
+            var: docker_disk_id_host_mapping
+            verbosity: 2
+      when:
+        - docker_disk_by_serial is defined
+        - docker_disk_by_serial
 
 - name: Last Mile OSE Config (Updated for 3.11)
   hosts: dynamic_inventory
+  vars_files:
+    - vault.yml
   roles:
     - role: openshift-prep

@@ -1,58 +1,77 @@
-    - name: Wait for SSH
-      wait_for:
-        host: "{{ inventory_hostname }}"
-        search_regex: OpenSSH
-        port: 22
-        timeout: 640
-      connection: local
+- name: Wait for SSH
+  wait_for:
+    host: "{{ inventory_hostname }}"
+    search_regex: OpenSSH
+    port: 22
+    timeout: 640
+  connection: local
 
-    - name: Install Packages for OpenShift
-      yum:
-        name:
-          - wget
-          - git
-          - net-tools
-          - bind-utils
-          - yum-utils
-          - iptables-services
-          - bridge-utils
-          - bash-completion
-          - kexec-tools
-          - sos
-          - psacct
-          - openshift-ansible
-          - docker
-          - vim-enhanced
-        state: latest
+- name: Set docker_disk_name
+  set_fact:
+    docker_disk_name: "/dev/sdb"
+  when:
+    - docker_disk_by_serial is undefined or not docker_disk_by_serial
 
-    - name: yum update
-      yum:
-        name: '*'
-        state: latest
+- name: Set docker_disk_name by Serial
+  block:
+    - name: Find Device by Serial
+      shell: "lsblk -lo name,serial | grep '{{ hostvars['localhost']['docker_disk_id_host_mapping'][inventory_hostname] }}' | awk '{ print $1 }'"
+      register: lsblk_shell_results
 
-    - name: Setup /etc/sysconfig/docker
-      copy:
-        src: files/docker
-        dest: /etc/sysconfig/docker
-        owner: root
-        group: root
-        mode: 0644
+    - name: Set Fact
+      set_fact:
+        docker_disk_name: "/dev/{{ lsblk_shell_results.stdout }}"
+  when:
+    - docker_disk_by_serial is defined
+    - docker_disk_by_serial
 
-    - name: Setup /etc/sysconfig/docker-storage-setup
-      copy:
-        src: files/docker-storage-setup
-        dest: /etc/sysconfig/docker-storage-setup
-        owner: root
-        group: root
-        mode: 0644
+- name: Install Packages for OpenShift
+  yum:
+    name:
+      - wget
+      - git
+      - net-tools
+      - bind-utils
+      - yum-utils
+      - iptables-services
+      - bridge-utils
+      - bash-completion
+      - kexec-tools
+      - sos
+      - psacct
+      - openshift-ansible
+      - docker
+      - vim-enhanced
+    state: latest
 
-    - name: Configure Docker Storage
-      shell: /usr/bin/docker-storage-setup &>/tmp/docker-storage-setup.log
-      args:
-        creates: /tmp/docker-storage-setup.log
+- name: yum update
+  yum:
+    name: '*'
+    state: latest
 
-    - name: Enable & Start Docker Service
-      service:
-        name: docker
-        state: started
-        enabled: yes
+- name: Setup /etc/sysconfig/docker
+  copy:
+    src: files/docker
+    dest: /etc/sysconfig/docker
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Setup /etc/sysconfig/docker-storage-setup from Template
+  template:
+    src: templates/docker-storage-setup.j2
+    dest: /etc/sysconfig/docker-storage-setup
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Configure Docker Storage
+  shell: /usr/bin/docker-storage-setup &>/tmp/docker-storage-setup.log
+  args:
+    creates: /tmp/docker-storage-setup.log
+
+- name: Enable & Start Docker Service
+  service:
+    name: docker
+    state: started
+    enabled: yes
