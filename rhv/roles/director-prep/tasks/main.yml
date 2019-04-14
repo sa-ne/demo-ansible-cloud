@@ -1,0 +1,38 @@
+- name: Create Stack User
+  user:
+    name: stack
+    shell: /bin/bash
+    password: "{{ director_stack_password | password_hash('sha512') }}"
+    
+- name: Copy stack User Sudoers File
+  copy:
+    src: files/stack
+    dest: /etc/sudoers.d/stack
+    mode: 0440
+    owner: root
+    group: root
+
+- name: Create ~/images and ~/templates for Stack User
+  file:
+    path: "/home/stack/{{ item }}"
+    state: directory
+    mode: 0750
+  with_items:
+    - images
+    - templates
+
+- name: Update System
+  yum:
+    name: '*'
+    state: latest
+
+- name: Reboot System
+  reboot:
+
+- name: Install python-tripleoclient and ceph-ansible Packages
+  yum:
+    name:
+      - python-tripleoclient
+      - ceph-ansible
+      - vim-enhanced
+    state: latest

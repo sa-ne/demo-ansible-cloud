@@ -1,0 +1,7 @@
+---
+- name: Provision Integrated VMs in Bulk
+  hosts: localhost
+  vars_files:
+    - vault.yml
+  roles:
+    - role: rhv-openstack

@@ -23,6 +23,7 @@
           with_items:
             - "{{ groups[provision_group] }}"
       when:
+        - cleanup_known_hosts is defined
         - cleanup_known_hosts
 
 - name: Retire Integrated VMs in Bulk

@@ -1,0 +1,14 @@
+---
+- name: Generate Dynamic Inventory
+  hosts: localhost
+  vars_files:
+    - vault.yml
+  roles:
+    - role: dynamic-inventory
+
+- name: Last Mile OSE Config (Updated for 3.11)
+  hosts: dynamic_inventory
+  vars_files:
+    - vault.yml
+  roles:
+    - role: director-prep
