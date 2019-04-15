@@ -14,6 +14,8 @@
     memory: "{{ hostvars[item].memory }}"
     cpu_sockets: "{{ hostvars[item].sockets }}"
     cpu_cores: "{{ hostvars[item].cores }}"
+  tags:
+    - create_vms
   register: ovirt_vm_results
   with_items:
     - "{{ groups[provision_group] }}"
@@ -54,6 +56,8 @@
           }
         ]
       }}
+  tags:
+    - disks
   with_items:
     - "{{ groups[provision_group] }}"
 
@@ -71,6 +75,8 @@
     format: "{{ item.1.format }}"
     interface: "{{ item.1.interface }}"
     storage_domain: "{{ item.1.storage_domain }}"
+  tags:
+    - disks
   with_subelements:
     - "{{ disk_name_dict }}"
     - disks
@@ -103,7 +109,32 @@
     network: "{{ item.1.network }}"
     profile: "{{ item.1.network }}"
     vm: "{{ item.0.name }}"
+  tags:
+    - create_nics
   with_subelements:
     - "{{ nic_name_dict }}"
     - nics
     - skip_missing: False
+
+- name: Get VM NIC Facts
+  ovirt_nic_facts:
+    auth:
+      username: "{{ rhv_username }}"
+      password: "{{ rhv_password }}"
+      url: "https://{{ rhv_hostname }}/ovirt-engine/api"
+      insecure: True
+    name: eth0
+    vm: "{{ item }}"
+  register: ovirt_nic_facts_results
+  with_items:
+    - "{{ groups[provision_group] }}"
+
+- name: Build VM/eth0 Results for instackenv.json
+  set_fact:
+    host_mac_list: "{{ host_mac_list | default([]) }} + [ '{{ item.item }} - {{ item.ansible_facts.ovirt_nics[0].mac.address }}' ]"
+  with_items:
+    - "{{ ovirt_nic_facts_results.results }}"
+
+- name: Show Host MAC List
+  debug:
+    var: host_mac_list

@@ -16,6 +16,8 @@
   file:
     path: "/home/stack/{{ item }}"
     state: directory
+    owner: stack
+    group: stack
     mode: 0750
   with_items:
     - images
@@ -35,4 +37,5 @@
       - python-tripleoclient
       - ceph-ansible
       - vim-enhanced
+      - python-ovirt-engine-sdk4
     state: latest
