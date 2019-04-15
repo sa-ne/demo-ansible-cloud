@@ -1,0 +1,367 @@
+---
+all:
+  vars:
+    provision_group: pg
+  children:
+    pg:
+      hosts:
+        control1.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 24GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        control2.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 24GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        control3.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 24GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        compute1.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 32GiB
+          sockets: 2
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        compute2.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 32GiB
+          sockets: 2
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        compute3.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 32GiB
+          sockets: 2
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        ceph1.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 16GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-journal
+            bootable: no
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd1
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd2
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        ceph2.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 16GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-journal
+            bootable: no
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd1
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd2
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio
+        ceph3.osp.pwc.umbrella.local:
+          search: osp.pwc.umbrella.local
+          memory: 16GiB
+          sockets: 1
+          cores: 4
+          disks:
+          - name: os
+            bootable: yes
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-journal
+            bootable: no
+            size: 100GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd1
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          - name: ceph-osd2
+            bootable: no
+            size: 250GiB
+            format: cow
+            interface: virtio_scsi
+            storage_domain: nfs-vms
+          nics:
+          - name: eth0
+            network: openstack-provisioning
+            interface: virtio
+          - name: eth1
+            network: openstack-storage
+            interface: virtio
+          - name: eth2
+            network: openstack-storage-mgmt
+            interface: virtio
+          - name: eth3
+            network: openstack-internal-api
+            interface: virtio
+          - name: eth4
+            network: openstack-tenant
+            interface: virtio
+          - name: eth5
+            network: openstack-external
+            interface: virtio
+          - name: eth6
+            network: openstack-management
+            interface: virtio

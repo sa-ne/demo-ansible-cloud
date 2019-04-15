@@ -1,0 +1,19 @@
+---
+all:
+  vars:
+    provision_group: pg
+    ipam_phpipam: True
+    ipam_inventory: False
+    satellite_activation_key: "OpenStack 13"
+    cleanup_known_hosts: True
+  children:
+    pg:
+      hosts:
+        director.osp.pwc.umbrella.local:
+          ipam_cidr: 172.16.10.0/24
+          search: osp.pwc.umbrella.local
+          memory: 24GiB
+          sockets: 1
+          cores: 4
+          template: rhel-server-7.6-x86_64-kvm-60G
+          storage_domain: nfs-vms
