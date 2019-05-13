@@ -1,0 +1,3 @@
+#Automating GCP operations with Ansible
+
+This document is a work in progress...

@@ -1,0 +1,16 @@
+- name: create a project
+  connection: local
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Create GCP project
+      gcp_resourcemanager_project:
+        name: My Sample Project
+        id: colgate-{{ 10000000000 | random }}
+        auth_kind: serviceaccount
+        service_account_contents: ""
+        parent:
+          type: organization
+          id: colgate-demo-238700
+        state: present
