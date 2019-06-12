@@ -1,0 +1,28 @@
+- name: Create an instance
+  hosts: localhost
+  gather_facts: no
+  connection: local
+
+  tasks:
+   - gce:
+      instance_names: "{{ instance_names }}"
+      machine_type: n1-standard-1
+      image: "{{ image_name }}"
+      state: present
+      disk_size: 32
+     register: gce
+     
+   - name: Save host data
+     add_host:
+       hostname: "{{ item.public_ip }}"
+       groupname: gce_instances_ips
+     with_items: "{{ gce.instance_data }}"
+
+   - name: Wait for SSH for instances
+     wait_for:
+       delay: 1
+       host: "{{ item.public_ip }}"
+       port: 22
+       state: started
+       timeout: 30
+     with_items: "{{ gce.instance_data }}"
