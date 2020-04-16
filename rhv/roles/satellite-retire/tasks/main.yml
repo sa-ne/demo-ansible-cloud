@@ -7,6 +7,6 @@
     password: "{{ satellite_password }}"
     validate_certs: no
     force_basic_auth: yes
-    code: 200
+    status_code: 200
   with_items:
     - "{{ groups[provision_group] }}"
