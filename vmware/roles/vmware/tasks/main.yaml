@@ -1,0 +1,34 @@
+- name: Create VM
+  vmware_guest:
+    cluster: "{{ hostvars[item].cluster }}"
+    customization:
+      dns_servers:
+      - "{{ hostvars[item].nameservers }}"
+      dns_suffix: "{{ hostvars[item].search }}"
+      domain: "{{ hostvars[item].search }}"
+      hostname: "{{ item.split('.')[0] }}"
+    datacenter: "{{ hostvars[item].datacenter }}"
+    datastore: "{{ hostvars[item].datastore }}"
+    folder: "{{ hostvars[item].datacenter }}/vm"
+    hardware:
+      memory_mb: "{{ hostvars[item].memory_mb }}"
+      num_cpus: "{{ hostvars[item].num_cpus }}"
+    hostname: "{{ vsphere_hostname }}"
+    name: "{{ item }}"
+    networks:
+    - name: "{{ hostvars[item].network }}"
+      ip: "{{ hostvars[item].ip }}"
+      netmask: "{{ hostvars[item].mask }}"
+      gateway: "{{ hostvars[item].gateway }}"
+      domain: "{{ hostvars[item].search }}"
+      dns_servers:
+      - "{{ hostvars[item].nameservers }}"
+    password: "{{ vsphere_password }}"
+    state: present
+    template: rhel7-template
+    username: "{{ vsphere_username }}"
+    validate_certs: no
+    wait_for_customization: yes
+    wait_for_ip_address: yes
+  with_items:
+    - "{{ groups[provision_group] }}"
